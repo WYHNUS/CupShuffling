@@ -1,0 +1,28 @@
+{
+  "name": "cupshuffling",
+  "version": "1.0.0",
+  "description": "Cup Shuffling Game Simulation",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "body-parser": "^1.18.2",
+    "express": "^4.16.2",
+    "jade": "^1.11.0",
+    "jquery": "^3.2.1",
+    "path": "^0.12.7",
+    "socket.io": "^2.0.3"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WYHNUS/CupShuffling.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/WYHNUS/CupShuffling/issues"
+  },
+  "homepage": "https://github.com/WYHNUS/CupShuffling#readme"
+}
