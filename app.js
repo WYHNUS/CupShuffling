@@ -16,6 +16,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/scripts', express.static(__dirname + '/node_modules/jquery/dist'));
+app.use('/scripts', express.static(__dirname + '/node_modules/bootstrap/dist'));
 app.use('/scripts', express.static(__dirname + '/node_modules/socket.io-client/dist'));
 
 // entry page

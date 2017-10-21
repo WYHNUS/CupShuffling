@@ -15,6 +15,14 @@ html
         p(id="game-status")
         button(id="start-button" onclick="activate()" disabled) Activate Game
         button(id="join-button" onclick="join()" disabled) Join Existing Game
+
+      table(id="game-panel" class="table table-striped table-dark")
+        thead
+          tr
+            th Timestamp
+            th Description
+        tbody
   
+  link(href='scripts/css/bootstrap.min.css', rel='stylesheet')
   link(href='style/main.css', rel='stylesheet')
   script(src="socket.js")

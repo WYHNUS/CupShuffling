@@ -53,6 +53,7 @@ module.exports.listen = function(app) {
       } else if (gameState == GAME_STATE_ENUM.UNACTIVATED) {
         // only able to activate if unactivated
         console.log('activated by: ' + req.playerId);
+        let date = new Date();
 
         // update game state
         gameState = GAME_STATE_ENUM.WAIT_FOR_JOIN;
@@ -62,10 +63,12 @@ module.exports.listen = function(app) {
 
         // broadcast to everyone
         io.emit('waiting-for-join', {
-          msg: 'New game activated by player: ' + req.playerId
+          msg: 'New game activated by player: ' + req.playerId,
+          time: date
         });
         io.emit('status-update', {
-          msg: 'Player: ' + req.playerId + ' has joined the game.'
+          msg: 'Player: ' + req.playerId + ' has joined the game.',
+          time: date
         });
         io.to(socket.id).emit('join-success');
 
@@ -98,7 +101,8 @@ module.exports.listen = function(app) {
         gamePlayers.add(req.playerId);
         // broadcast to everyone
         io.emit('status-update', {
-          msg: 'Player: ' + req.playerId + ' has joined the game.'
+          msg: 'Player: ' + req.playerId + ' has joined the game.',
+          time: new Date()
         });
         io.to(socket.id).emit('join-success');
       } else {

@@ -50,7 +50,7 @@ socket.on('players', function(data) {
  * Game Status Update
  */
 socket.on('status-update', function(data) {
-  // todo: create panel and update game panel
+  updatePanel(data.time, data.msg);
 });
 
 /**
@@ -67,7 +67,7 @@ socket.on('waiting-for-join', function(data) {
   $('#game-status').text(data.msg);
   $('#start-button').attr('disabled', 'disabled');
   $('#join-button').removeAttr('disabled');
-  // todo: update game panel
+  updatePanel(data.time, data.msg);
 });
 
 socket.on('activate-failure', function(data) {
@@ -96,6 +96,12 @@ socket.on('join-failure', function(data) {
   $('#game-status').text(data.msg);
 });
 
+function updatePanel(timestamp, description) {
+  $('#game-panel').find('tbody')
+    .append($('<tr>')
+      .append($('<td>').append($('<p>').text(timestamp)))
+      .append($('<td>').append($('<p>').text(description))));
+}
 
 /**
  * May not be the best solution, but suit for the needs of this project.
