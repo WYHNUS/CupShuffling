@@ -10,6 +10,11 @@ html
       div(id="player-count-wrapper")
         p Number of players: 
         p(id="player-count")
+
+      div(id="game-status-wrapper")
+        p(id="game-status")
+        button(id="start-button" onclick="activate()" disabled) Activate Game
+        button(id="join-button" onclick="join()" disabled) Join Existing Game
   
   link(href='style/main.css', rel='stylesheet')
   script(src="socket.js")

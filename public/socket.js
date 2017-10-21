@@ -6,16 +6,19 @@ const socket = io('http://127.0.0.1:8088', {
   }
 });
 
+
+/**
+ * Connect to Backend
+ */
 socket.on('enter', function(data) {
   console.log('socket connection established!');
-  console.log(data);
   // Set url to reflect player id
   // Note: 
   // this way of assigning player id is for the ease of testing via simulating
   // multiple client (player) by opening multiple windows on one single machine.
   // But it is a bad practice and should be discouraged in general.
   if (!getParameterByName(ID_PARAM)) {
-    var url = window.location.href;
+    let url = window.location.href;
     if (url.indexOf('?') < 0) {
       url += '?';
     } else {
@@ -24,13 +27,75 @@ socket.on('enter', function(data) {
     url += (ID_PARAM + '=' + data.id);
     window.location.href = url;
   }
+
+  // update game status
+  if (data.status == 1 /* UNACTIVATED */) {
+    $('#game-status').text('Game has not been activated.');
+    $('#start-button').removeAttr('disabled');
+  } else if (data.status == 2 /* WAIT_FOR_JOIN */) {
+    $('#game-status').text('Game is waiting for join.');
+    $('#join-button').removeAttr('disabled');
+  } else /* STARTED */ {
+    $('#game-status').text('Game already started, wait for next game to participate.');
+  }
 });
 
+// update player count
 socket.on('players', function(data) {
   console.log('number of players updated!');
-  console.log(data);
   $('#player-count').text(data.count);
 });
+
+/**
+ * Game Status Update
+ */
+socket.on('status-update', function(data) {
+  // todo: create panel and update game panel
+});
+
+/**
+ * Activate Game
+ */
+function activate() {
+  socket.emit('activate', {
+    playerId: getParameterByName(ID_PARAM)
+  });
+}
+
+// activate status
+socket.on('waiting-for-join', function(data) {
+  $('#game-status').text(data.msg);
+  $('#start-button').attr('disabled', 'disabled');
+  $('#join-button').removeAttr('disabled');
+  // todo: update game panel
+});
+
+socket.on('activate-failure', function(data) {
+  $('#game-status').text(data.msg);
+});
+
+
+/**
+ * Join Game
+ */
+function join() {
+  socket.emit('join', {
+    playerId: getParameterByName(ID_PARAM)
+  });
+}
+
+// join status
+socket.on('join-success', function(data) {
+  $('#game-status').text('Successfully join current game.');
+  $('#join-button').attr('disabled', 'disabled');
+  // todo: change join button to un-join (to be supported once main function are implemented)
+});
+
+// join status
+socket.on('join-failure', function(data) {
+  $('#game-status').text(data.msg);
+});
+
 
 /**
  * May not be the best solution, but suit for the needs of this project.
@@ -40,7 +105,7 @@ socket.on('players', function(data) {
 function getParameterByName(name, url) {
   if (!url) url = window.location.href;
   name = name.replace(/[\[\]]/g, '\\$&');
-  var regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
+  let regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
       results = regex.exec(url);
   if (!results) return '';
   if (!results[2]) return '';
