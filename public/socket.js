@@ -88,14 +88,33 @@ function join() {
 socket.on('join-success', function(data) {
   $('#game-status').text('Successfully join current game.');
   $('#join-button').attr('disabled', 'disabled');
-  // todo: change join button to un-join (to be supported once main function are implemented)
+  // todo: change join button to un-join (is it necessary to implement this feature?)
 });
 
-// join status
 socket.on('join-failure', function(data) {
   $('#game-status').text(data.msg);
 });
 
+// timer used when waiting to join the game
+socket.on('timer-update', function(data) {
+  $('#game-timer').text(data.msg);
+});
+
+socket.on('game-start', function(data) {
+  $('#game-timer').text('');
+  $('#game-status').text(data.msg);
+  updatePanel(data.time, data.msg);
+});
+
+
+/**
+ * Action users have in each round of the game.
+ */
+
+
+/**
+ * Update game dashboard.
+ */
 function updatePanel(timestamp, description) {
   $('#game-panel').find('tbody')
     .append($('<tr>')

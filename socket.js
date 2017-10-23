@@ -2,6 +2,7 @@
 const socketIo = require('socket.io');
 
 // game status
+const JOIN_DEADLINE = 10; // in seconds
 const GAME_STATE_ENUM = {
   UNACTIVATED: 1,
   WAIT_FOR_JOIN: 2,
@@ -14,6 +15,7 @@ module.exports.listen = function(app) {
   // global variables
   var connectionCount = 0;
   var playerId = 1; // customized client id
+  var countdown = 0;
   var gameState = 1;
   var gamePlayers = new Set();
 
@@ -52,7 +54,7 @@ module.exports.listen = function(app) {
         });
       } else if (gameState == GAME_STATE_ENUM.UNACTIVATED) {
         // only able to activate if unactivated
-        console.log('activated by: ' + req.playerId);
+        console.log('Game activated by player ' + req.playerId + '.');
         let date = new Date();
 
         // update game state
@@ -72,8 +74,24 @@ module.exports.listen = function(app) {
         });
         io.to(socket.id).emit('join-success');
 
-        // todo: set a counter to change game status from WAIT_FOR_JOIN to STARTED
-
+        // update counter 
+        countdown = JOIN_DEADLINE;
+        let timer = setInterval(() => {
+          if (countdown > 0) {
+            io.emit('timer-update', { 
+              msg: 'Game will start in ' + (countdown--) + ' seconds.'
+            });
+          } else {
+            // change game status from WAIT_FOR_JOIN to STARTED
+            console.log('Game started.');
+            gameState = GAME_STATE_ENUM.STARTED;
+            clearInterval(timer);
+            io.emit('game-start', { 
+              msg: 'Game has started.',
+              time: new Date()
+            });
+          }
+        }, 1000);
       } else {
         // deny request
         io.to(socket.id).emit('activate-failure', {
