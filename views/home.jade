@@ -7,15 +7,23 @@ html
 
   body
     div(id="main")
-      div(id="player-count-wrapper")
-        p Number of players: 
-        p(id="player-count")
+      div(class="row")
+        div(class="col-md-5")
+          div(id="player-count-wrapper")
+            p Number of players: 
+            p(id="player-count")
 
-      div(id="game-status-wrapper")
-        p(id="game-status")
-        p(id="game-timer")
-        button(id="start-button" onclick="activate()" disabled) Activate Game
-        button(id="join-button" onclick="join()" disabled) Join Existing Game
+          div(id="game-status-wrapper")
+            p(id="game-status")
+            p(id="game-timer")
+            button(id="start-button" onclick="activate()" disabled) Activate Game
+            button(id="join-button" onclick="join()" disabled) Join Existing Game
+
+        div(class="col-md-5 text-right")
+          span Money possess:
+          span(id="bank-amount")
+
+        div(class="col-md-1")
 
       table(id="game-panel" class="table table-striped table-dark")
         thead

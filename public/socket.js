@@ -38,6 +38,9 @@ socket.on('enter', function(data) {
   } else /* STARTED */ {
     $('#game-status').text('Game already started, wait for next game to participate.');
   }
+
+  // display current bank value
+  $('#bank-amount').text(data.amt);
 });
 
 // update player count

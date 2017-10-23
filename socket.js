@@ -8,6 +8,7 @@ const GAME_STATE_ENUM = {
   WAIT_FOR_JOIN: 2,
   STARTED: 3
 };
+const PLAYER_INITIAL_AMT = 10;
 
 module.exports.listen = function(app) {
   io = socketIo.listen(app);
@@ -18,6 +19,7 @@ module.exports.listen = function(app) {
   var countdown = 0;
   var gameState = 1;
   var gamePlayers = new Set();
+  var playerBank = new Map();
 
   io.on('connection', function(socket) {
     connectionCount++;
@@ -25,10 +27,19 @@ module.exports.listen = function(app) {
         ? socket.handshake.query.playerId 
         : playerId++;
 
+    // set initial money player process
+    let amount = PLAYER_INITIAL_AMT;
+    if (playerBank.has(currentPlayerId)) {
+      amount = playerBank.get(currentPlayerId);
+    } else {
+      playerBank.set(currentPlayerId, PLAYER_INITIAL_AMT);
+    }
+
     // send connected socket its player id
     io.to(socket.id).emit('enter', {
       id: currentPlayerId,
-      status: gameState
+      status: gameState,
+      amt: amount
     });
 
     // tell all connected sockets player count has increased
