@@ -22,6 +22,15 @@ html
         div(class="col-md-5 text-right")
           span Money possess:
           span(id="bank-amount")
+          div
+            p Current secret:
+            p(id="secret-display")
+            button(id="generate-secret" onclick="getSecret()") Get Random Secret
+          div
+            span Make a guess:
+            input(id="guess-input" type="number") 
+          div
+            button(id="send-guess" onclick="sendGuess()") Send Encrypted Guess
 
         div(class="col-md-1")
 

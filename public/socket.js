@@ -113,6 +113,31 @@ socket.on('game-start', function(data) {
 /**
  * Action users have in each round of the game.
  */
+function sendGuess() {
+  // prevent secret change and submit multiple times
+  $('#generate-secret').attr('disabled', 'disabled');
+  $('#send-guess').attr('disabled', 'disabled');
+
+  let secret = $('#secret-display').text();
+  let guess = $('#guess-input').val();
+
+  // user will encode his guess locally
+  let commit = 'todo: encoding';
+
+  socket.emit('commit', {
+    playerId: getParameterByName(ID_PARAM),
+    commit: commit
+  });
+}
+
+function getSecret() {
+  $('#secret-display').text(generateSecret());
+}
+
+function generateSecret() {
+  // might need to be replaced later
+  return Math.floor(Math.random() * 10000000000000000);
+} 
 
 
 /**
