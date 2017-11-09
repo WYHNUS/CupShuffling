@@ -169,11 +169,18 @@ module.exports.listen = function(app) {
 
                     // todo: award user who has made correct guess
 
-                    // end game by change game status from COMMITTED to UNACTIVATED
+                    // end game by changing all game variables to default value
                     gameState = GAME_STATE_ENUM.UNACTIVATED;
+                    gamePlayers = new Set();
+                    playerCommit = new Map();
+                    playerGuess = new Map();
+                    validPlayer = new Set();
+                    treasureLocation = 0;
+                    
                     clearInterval(revealTimer);
-
-                    io.emit('game-end');
+                    io.emit('game-end', {
+                      msg: 'Game has not been activated.'
+                    });
                   }
                 }, 1000);
               }

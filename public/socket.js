@@ -91,7 +91,6 @@ function join() {
 socket.on('join-success', function(data) {
   $('#game-status').text('Successfully join current game.');
   $('#join-button').attr('disabled', 'disabled');
-  // todo: change join button to un-join (is it necessary to implement this feature?)
 });
 
 socket.on('join-failure', function(data) {
@@ -107,6 +106,7 @@ socket.on('timer-update', function(data) {
 socket.on('game-start', function(data) {
   $('#game-timer').text('');
   $('#game-status').text(data.msg);
+  $('#send-guess').removeAttr('disabled');
   updatePanel(data.time, data.msg);
 });
 
@@ -118,8 +118,11 @@ socket.on('reveal-secret', function(data) {
   updatePanel(data.time, data.msg);
 });
 
-socket.on('game-end', () => {
+socket.on('game-end', (data) => {
   $('#start-button').removeAttr('disabled');
+  $('#game-status').text(data.msg);
+  $('#game-timer').text('');
+  $('#reveal-secret').attr('disabled', 'disabled');
 });
 
 /**
@@ -135,6 +138,9 @@ function sendSecret() {
 }
 
 function sendGuess() {
+  // todo: validate if guess is valid (within range)
+
+
   // prevent secret change and submit multiple times
   $('#generate-secret').attr('disabled', 'disabled');
   $('#send-guess').attr('disabled', 'disabled');
@@ -167,7 +173,7 @@ function generateSecret() {
  */
 function updatePanel(timestamp, description) {
   $('#game-panel').find('tbody')
-    .append($('<tr>')
+    .prepend($('<tr>')
       .append($('<td>').append($('<p>').text(timestamp)))
       .append($('<td>').append($('<p>').text(description))));
 }

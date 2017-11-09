@@ -25,5 +25,5 @@ app.get('/', function(req, res) {
 });
 
 http.listen(port, function(server) {
-    console.log('Listening on port %d', port);
-  });
+  console.log('Listening on port %d', port);
+});

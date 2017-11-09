@@ -30,7 +30,7 @@ html
             span Make a guess:
             input(id="guess-input" type="number") 
           div
-            button(id="send-guess" onclick="sendGuess()") Send Encrypted Guess
+            button(id="send-guess" onclick="sendGuess()" disabled) Send Encrypted Guess
           div
             button(id="reveal-secret" onclick="sendSecret()" disabled) Send Secret for Verification
 
