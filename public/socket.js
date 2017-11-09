@@ -98,21 +98,42 @@ socket.on('join-failure', function(data) {
   $('#game-status').text(data.msg);
 });
 
-// timer used when waiting to join the game
+// timer used for updating the game status clock
 socket.on('timer-update', function(data) {
   $('#game-timer').text(data.msg);
 });
 
+// start to send commit and guess
 socket.on('game-start', function(data) {
   $('#game-timer').text('');
   $('#game-status').text(data.msg);
   updatePanel(data.time, data.msg);
 });
 
+// start to reveal secret
+socket.on('reveal-secret', function(data) {
+  $('#game-timer').text('');
+  $('#game-status').text(data.msg);
+  $('#reveal-secret').removeAttr('disabled');
+  updatePanel(data.time, data.msg);
+});
+
+socket.on('game-end', () => {
+  $('#start-button').removeAttr('disabled');
+});
 
 /**
  * Action users have in each round of the game.
  */
+function sendSecret() {
+  let secret = $('#secret-display').text();
+
+  socket.emit('reveal-secret', {
+    playerId: getParameterByName(ID_PARAM),
+    secret: secret
+  });
+}
+
 function sendGuess() {
   // prevent secret change and submit multiple times
   $('#generate-secret').attr('disabled', 'disabled');
@@ -121,12 +142,13 @@ function sendGuess() {
   let secret = $('#secret-display').text();
   let guess = $('#guess-input').val();
 
-  // user will encode his guess locally
-  let commit = 'todo: encoding';
-
-  socket.emit('commit', {
+  // user should encode his secret locally, but for simplicity, 
+  // he will send the secret to the server and let server to encrypt
+  // using external libraries
+  socket.emit('commit-guess', {
     playerId: getParameterByName(ID_PARAM),
-    commit: commit
+    commit: secret,
+    guess: guess
   });
 }
 
