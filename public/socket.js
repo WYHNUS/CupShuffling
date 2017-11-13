@@ -174,6 +174,10 @@ function sendSecret() {
   });
 }
 
+socket.on('reveal-success', function(data) {
+  $('#reveal-secret').attr('disabled', 'disabled');
+});
+
 socket.on('reveal-failure', function(data) {
   $('#game-status').text(data.msg);
 });
