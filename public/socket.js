@@ -187,6 +187,10 @@ socket.on('game-end', (data) => {
   $('#game-status').text(data.msg);
   $('#game-timer').text('');
   $('#reveal-secret').attr('disabled', 'disabled');
+
+  if (data.panelMsg && data.time) {
+    updatePanel(data.time, data.panelMsg);
+  }
 });
 
 
