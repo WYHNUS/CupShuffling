@@ -4,8 +4,9 @@ const socketIo = require('socket.io');
 const sha256 = require('sha256');
 
 // game status
-// deadlines in seconds
 const MIN_AMOUNT = 1;
+const SUBSCRIPTION_FEE = 0.1;
+// deadlines in seconds
 const JOIN_DEADLINE = 10; 
 const COMMIT_DEADLINE = 10;
 const REVEAL_DEADLINE = 10;
@@ -23,6 +24,7 @@ module.exports.listen = function(app) {
   // global variables
   var connectionCount = 0;
   var playerId = 1; // customized client id
+  var playerSocketMap = new Map(); 
   var countdown = 0;
   var gameState = 1;
   var gamePlayers = new Set();
@@ -31,12 +33,15 @@ module.exports.listen = function(app) {
   var playerGuess = new Map();
   var validPlayer = new Set();
   var treasureLocation = 0;
+  var treasurePool = 0.0;
 
   io.on('connection', function(socket) {
     connectionCount++;
     let currentPlayerId = (socket.handshake.query.playerId && socket.handshake.query.playerId != '') 
         ? socket.handshake.query.playerId 
         : playerId++;
+
+    playerSocketMap.set(currentPlayerId, socket.id);
 
     // set initial money player process
     let amount = PLAYER_INITIAL_AMT;
@@ -50,7 +55,7 @@ module.exports.listen = function(app) {
     io.to(socket.id).emit('enter', {
       id: currentPlayerId,
       status: gameState,
-      amt: amount
+      amount: amount
     });
 
     // tell all connected sockets player count has increased
@@ -60,6 +65,7 @@ module.exports.listen = function(app) {
 
     socket.on('disconnect', function() {
       connectionCount--;
+      playerSocketMap.delete(currentPlayerId);
       io.emit('players', { count: connectionCount });
     });
 
@@ -72,125 +78,140 @@ module.exports.listen = function(app) {
       if (!req.playerId) {
         // deny request
         io.to(socket.id).emit('activate-failure', {
-          msg: 'Please specify your id'
+          msg: 'Please specify your id.'
         });
       } else if (gameState == GAME_STATE_ENUM.UNACTIVATED) {
-        // only able to activate if unactivated
-        console.log('Game activated by player ' + req.playerId + '.');
-        let date = new Date();
+        if (playerBank.get(req.playerId) < MIN_AMOUNT) {
+          io.to(socket.id).emit('activate-failure', {
+            msg: 'Not enough credit to enter the game, you need at least: ' + MIN_AMOUNT
+          });
+        } else {
+          // only able to activate if unactivated
+          console.log('Game activated by player ' + req.playerId + '.');
+          let date = new Date();
 
-        // update game state
-        gameState = GAME_STATE_ENUM.WAIT_FOR_JOIN;
+          // update game state
+          gameState = GAME_STATE_ENUM.WAIT_FOR_JOIN;
 
-        // automatically make the player join the game he activated
-        gamePlayers.add(req.playerId);
+          // automatically make the player join the game he activated
+          gamePlayers.add(req.playerId);
 
-        // broadcast to everyone
-        io.emit('waiting-for-join', {
-          msg: 'New game activated by player: ' + req.playerId,
-          time: date
-        });
-        io.emit('status-update', {
-          msg: 'Player: ' + req.playerId + ' has joined the game.',
-          time: date
-        });
-        io.to(socket.id).emit('join-success');
+          // broadcast to everyone
+          io.emit('waiting-for-join', {
+            msg: 'New game activated by player: ' + req.playerId,
+            time: date
+          });
+          io.emit('status-update', {
+            msg: 'Player: ' + req.playerId + ' has joined the game.',
+            time: date
+          });
+          io.to(socket.id).emit('join-success');
 
-        // update counter 
-        countdown = JOIN_DEADLINE;
-        let joinTimer = setInterval(() => {
-          if (countdown > 0) {
-            io.emit('timer-update', { 
-              msg: 'Game will start in ' + (countdown--) + ' seconds.'
-            });
-          } else {
-            // change game status from WAIT_FOR_JOIN to STARTED
-            console.log('Game started.');
-            gameState = GAME_STATE_ENUM.STARTED;
-            clearInterval(joinTimer);
-            io.emit('game-start', { 
-              msg: 'Game has started.',
-              time: new Date()
-            });
+          // update counter 
+          countdown = JOIN_DEADLINE;
+          let joinTimer = setInterval(() => {
+            if (countdown > 0) {
+              io.emit('timer-update', { 
+                msg: 'Game will start in ' + (countdown--) + ' seconds.'
+              });
+            } else {
+              // change game status from WAIT_FOR_JOIN to STARTED
+              console.log('Game started.');
+              gameState = GAME_STATE_ENUM.STARTED;
+              clearInterval(joinTimer);
+              io.emit('game-start', { 
+                msg: 'Game has started.',
+                time: new Date()
+              });
 
-            // update counter
-            countdown = COMMIT_DEADLINE;
-            let commitTimer = setInterval(() => {
-              if (countdown > 0) {
-                io.emit('timer-update', { 
-                  msg: 'You have ' + (countdown--) + ' seconds to send your guess.'
-                });
-              } else {
-                // change game status from STARTED to COMMITTED
-                console.log('Commit started.');
-                gameState = GAME_STATE_ENUM.COMMITTED;
-                clearInterval(commitTimer);
+              // update counter
+              countdown = COMMIT_DEADLINE;
+              let commitTimer = setInterval(() => {
+                if (countdown > 0) {
+                  io.emit('timer-update', { 
+                    msg: 'You have ' + (countdown--) + ' seconds to send your guess.'
+                  });
+                } else {
+                  // change game status from STARTED to COMMITTED
+                  console.log('Commit started.');
+                  gameState = GAME_STATE_ENUM.COMMITTED;
+                  clearInterval(commitTimer);
 
-                // todo: implement reveal-secret in client side
-                io.emit('reveal-secret', {
-                  msg: 'Game in reveal secret stage.',
-                  time: new Date()
-                });
+                  io.emit('reveal-secret', {
+                    msg: 'Game in reveal secret stage.',
+                    time: new Date()
+                  });
 
-                // update counter
-                countdown = REVEAL_DEADLINE;
-                let revealTimer = setInterval(() => {
-                  if (countdown > 0) {
-                    io.emit('timer-update', { 
-                      msg: 'You have ' + (countdown--) + ' seconds to reveal your secret.'
-                    });
-                  } else {
-                    // convert 0 based location to 1 based index
-                    treasureLocation++;
-                    let msg = 'Game finishes with correct location: ' + treasureLocation;
-                    console.log(msg);
-                    io.emit('status-update', {
-                      msg: msg,
-                      time: new Date
-                    });
-
-                    // count number of players who have made correct guess
-                    let correctPlayer = new Set();
-                    for (let id of validPlayer) {
-                      if (playerGuess.get(id) == treasureLocation) {
-                        correctPlayer.add(id);
-                      }
-                    }
-
-                    if (correctPlayer.size === 0) {
-                      msg = 'No player has made the correct guess.';
+                  // update counter
+                  countdown = REVEAL_DEADLINE;
+                  let revealTimer = setInterval(() => {
+                    if (countdown > 0) {
+                      io.emit('timer-update', { 
+                        msg: 'You have ' + (countdown--) + ' seconds to reveal your secret.'
+                      });
                     } else {
-                      msg = 'Player ' + Array.from(correctPlayer).toString() + ' has made correct guess.';
+                      // convert 0 based location to 1 based index
+                      treasureLocation++;
+                      let msg = 'Game finishes with correct location: ' + treasureLocation;
+                      console.log(msg);
+                      io.emit('status-update', {
+                        msg: msg,
+                        time: new Date
+                      });
+
+                      // count number of players who have made correct guess
+                      let correctPlayer = new Set();
+                      for (let id of validPlayer) {
+                        if (playerGuess.get(id) == treasureLocation) {
+                          correctPlayer.add(id);
+                        }
+                      }
+
+                      if (correctPlayer.size === 0) {
+                        msg = 'No player has made the correct guess.';
+                      } else {
+                        msg = 'Player ' + Array.from(correctPlayer).toString() + ' has made correct guess.';
+                      }
+                      io.emit('status-update', {
+                        msg: msg,
+                        time: new Date
+                      });
+
+                      // award user who has made correct guess
+                      if (correctPlayer.size != 0) {
+                        let individualPrice = Math.floor(treasurePool * 100 / correctPlayer.size) / 100;
+                        for (let id of correctPlayer) {
+                          playerBank.set(id, playerBank.get(id) + individualPrice);
+                          io.to(playerSocketMap.get(id)).emit('bank-update', {
+                            amount: playerBank.get(id)
+                          });
+                        }
+                        treasurePool = 0;
+                      }
+
+                      // end game: change game variables to default value
+                      gameState = GAME_STATE_ENUM.UNACTIVATED;
+                      gamePlayers = new Set();
+                      playerCommit = new Map();
+                      playerGuess = new Map();
+                      validPlayer = new Set();
+                      treasureLocation = 0;
+                      
+                      clearInterval(revealTimer);
+                      io.emit('game-end', {
+                        msg: 'Game has not been activated.'
+                      });
                     }
-                    io.emit('status-update', {
-                      msg: msg,
-                      time: new Date
-                    });
-
-                    // todo: award user who has made correct guess
-
-                    // end game by changing all game variables to default value
-                    gameState = GAME_STATE_ENUM.UNACTIVATED;
-                    gamePlayers = new Set();
-                    playerCommit = new Map();
-                    playerGuess = new Map();
-                    validPlayer = new Set();
-                    treasureLocation = 0;
-                    
-                    clearInterval(revealTimer);
-                    io.emit('game-end', {
-                      msg: 'Game has not been activated.'
-                    });
-                  }
-                }, 1000);
-              }
-            }, 1000);
-          }
-        }, 1000);
+                  }, 1000);
+                }
+              }, 1000);
+            }
+          }, 1000);
+        }
       } else {
         // deny request
         io.to(socket.id).emit('activate-failure', {
-          msg: 'Game already in progress'
+          msg: 'Game already in progress.'
         });
       }
     });
@@ -203,21 +224,29 @@ module.exports.listen = function(app) {
           msg: 'Please specify your id.'
         });
       } else if (gameState == GAME_STATE_ENUM.WAIT_FOR_JOIN) {
-        if (gamePlayers.has(req.playerId)) {
+        let id = req.playerId;
+        if (gamePlayers.has(id)) {
           // deny request
           io.to(socket.id).emit('join-failure', {
             msg: 'You already in the game!'
           });
-        }
+        } else if (playerBank.get(id) >= MIN_AMOUNT) {
+          console.log('Player ' + id + ' has joined current game.');
+          gamePlayers.add(id);
 
-        console.log('Player ' + req.playerId + ' has joined current game.');
-        gamePlayers.add(req.playerId);
-        // broadcast to everyone
-        io.emit('status-update', {
-          msg: 'Player: ' + req.playerId + ' has joined the game.',
-          time: new Date()
-        });
-        io.to(socket.id).emit('join-success');
+          // broadcast to everyone
+          io.emit('status-update', {
+            msg: 'Player: ' + id + ' has joined the game.',
+            time: new Date()
+          });
+
+          io.to(socket.id).emit('join-success');
+        } else {
+          // deny request: not enough credit
+          io.to(socket.id).emit('join-failure', {
+            msg: 'Not enough credit to enter the game, you need at least: ' + MIN_AMOUNT
+          });
+        }
       } else {
         // deny request
         let errorMsg = GAME_STATE_ENUM.UNACTIVATED 
@@ -231,18 +260,31 @@ module.exports.listen = function(app) {
 
     // client send (encrypted commit, guess) pair
     socket.on('commit-guess', function(req) {
-      let id = req.playerId;
-      // encrypt for the user for simplicity
-      let commit = sha256(req.commit);
-      let guess = req.guess;
+      if (!req.playerId || !req.guess || !req.commit) {
+        // deny request
+        io.to(socket.id).emit('commit-failure', {
+          msg: 'Invalid request: must specify id, guess and commitment.'
+        });
+      } else if (gameState == GAME_STATE_ENUM.STARTED) {
+        let id = req.playerId;
+        let guess = req.guess;
+        // encrypt for the user for simplicity
+        let commit = sha256(req.commit);
 
-      // check if player has enough credit in the bank account
-      if (gamePlayers.has(id) && playerBank.has(id)) {
-        if (playerBank.get(id) >= MIN_AMOUNT) {
+        console.log('Player ' + id + ' send guess: ' + guess + ' with commit: ' + commit);
+
+        // check if player has enough credit in the bank account
+        if (gamePlayers.has(id) && playerBank.has(id)) {
           // store commit and guess
           playerCommit.set(id, commit);
           playerGuess.set(id, guess);
-          // deduct subscription fee for guess
+
+          // deduct value for guess, and add that into treasure pool
+          playerBank.set(id, playerBank.get(id) - MIN_AMOUNT);
+          treasurePool += (MIN_AMOUNT - SUBSCRIPTION_FEE);
+          io.to(socket.id).emit('bank-update', {
+            amount: playerBank.get(id)
+          });
 
           // update everyone
           let commitMessage = 'Player ' + id + ' has made a guess ' + guess 
@@ -252,12 +294,19 @@ module.exports.listen = function(app) {
             time: new Date()
           });
         } else {
-          // not enough credit
-
+          // player not present (not suppose to happen in test senario)
+          io.to(socket.id).emit('commit-failure', {
+            msg: 'Invalid player id.'
+          });
         }
       } else {
-        // player not present
-
+        // deny request
+        let errorMsg = GAME_STATE_ENUM.UNACTIVATED 
+            ? 'Please activate the game first.'
+            : 'You can only commit in commit guess phase.'
+        io.to(socket.id).emit('commit-failure', {
+          msg: errorMsg
+        });
       }
     });
 
@@ -266,22 +315,42 @@ module.exports.listen = function(app) {
       let id = req.playerId;
       let secret = req.secret;
 
-      // check if encrypted secret matches with the one stored previously
-      if (sha256(secret) === playerCommit.get(id)) {
-        // add secret to determine the location of the cup
-        treasureLocation = (treasureLocation + secret) % gamePlayers.size;
-        io.emit('status-update', {
-          msg: 'Player ' + id + ' has revealed valid secret: ' + secret,
-          time: new Date()
+      if (!id || !secret) {
+        // deny request
+        io.to(socket.id).emit('reveal-failure', {
+          msg: 'Invalid request: must specify id and previous commitment\'s secret.'
         });
+      } else if (gameState == GAME_STATE_ENUM.COMMITTED) {
+        // check if encrypted secret matches with the one stored previously
+        if (sha256(secret) === playerCommit.get(id)) {
+          // add secret to determine the location of the cup
+          treasureLocation = (treasureLocation + secret) % gamePlayers.size;
+          io.emit('status-update', {
+            msg: 'Player ' + id + ' has revealed valid secret: ' + secret,
+            time: new Date()
+          });
 
-        validPlayer.add(id);
+          validPlayer.add(id);
 
-        // todo: return user the subscription fee
+          // return user the subscription fee
+          playerBank.set(id, playerBank.get(id) + SUBSCRIPTION_FEE);
+          io.to(socket.id).emit('bank-update', {
+            amount: playerBank.get(id)
+          });
 
+        } else {
+          io.to(socket.id).emit('reveal-failure', {
+            msg: 'Incorrect secret: it is not able to open up previous commit.'
+          });
+        }
       } else {
-        // reject
-
+        // deny request
+        let errorMsg = GAME_STATE_ENUM.UNACTIVATED 
+            ? 'Please activate the game first.'
+            : 'You can only reveal secret in reveal secret phase.'
+        io.to(socket.id).emit('reveal-failure', {
+          msg: errorMsg
+        });
       }
     });
   }); 

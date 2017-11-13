@@ -40,7 +40,7 @@ socket.on('enter', function(data) {
   }
 
   // display current bank value
-  $('#bank-amount').text(data.amt);
+  $('#bank-amount').text(data.amount);
 });
 
 // update player count
@@ -49,12 +49,23 @@ socket.on('players', function(data) {
   $('#player-count').text(data.count);
 });
 
+
 /**
- * Game Status Update
+ * Game Status, Bank Amount and Timer Update
  */
 socket.on('status-update', function(data) {
   updatePanel(data.time, data.msg);
 });
+
+socket.on('bank-update', function(data) {
+  $('#bank-amount').text(data.amount);
+});
+
+// timer used for updating the game status clock
+socket.on('timer-update', function(data) {
+  $('#game-timer').text(data.msg);
+});
+
 
 /**
  * Activate Game
@@ -97,12 +108,7 @@ socket.on('join-failure', function(data) {
   $('#game-status').text(data.msg);
 });
 
-// timer used for updating the game status clock
-socket.on('timer-update', function(data) {
-  $('#game-timer').text(data.msg);
-});
-
-// start to send commit and guess
+// game starts -> players can send commit and guess
 socket.on('game-start', function(data) {
   $('#game-timer').text('');
   $('#game-status').text(data.msg);
@@ -110,33 +116,10 @@ socket.on('game-start', function(data) {
   updatePanel(data.time, data.msg);
 });
 
-// start to reveal secret
-socket.on('reveal-secret', function(data) {
-  $('#game-timer').text('');
-  $('#game-status').text(data.msg);
-  $('#reveal-secret').removeAttr('disabled');
-  updatePanel(data.time, data.msg);
-});
-
-socket.on('game-end', (data) => {
-  $('#start-button').removeAttr('disabled');
-  $('#game-status').text(data.msg);
-  $('#game-timer').text('');
-  $('#reveal-secret').attr('disabled', 'disabled');
-});
 
 /**
- * Action users have in each round of the game.
+ * Commit Guess
  */
-function sendSecret() {
-  let secret = $('#secret-display').text();
-
-  socket.emit('reveal-secret', {
-    playerId: getParameterByName(ID_PARAM),
-    secret: secret
-  });
-}
-
 function sendGuess() {
   // todo: validate if guess is valid (within range)
 
@@ -158,6 +141,17 @@ function sendGuess() {
   });
 }
 
+socket.on('reveal-secret', function(data) {
+  $('#game-timer').text('');
+  $('#game-status').text(data.msg);
+  $('#reveal-secret').removeAttr('disabled');
+  updatePanel(data.time, data.msg);
+});
+
+socket.on('commit-failure', function(data) {
+  $('#game-status').text(data.msg);
+});
+
 function getSecret() {
   $('#secret-display').text(generateSecret());
 }
@@ -166,6 +160,34 @@ function generateSecret() {
   // might need to be replaced later
   return Math.floor(Math.random() * 10000000000000000);
 } 
+
+
+/**
+ * Reveal Secret
+ */
+function sendSecret() {
+  let secret = $('#secret-display').text();
+
+  socket.emit('reveal-secret', {
+    playerId: getParameterByName(ID_PARAM),
+    secret: secret
+  });
+}
+
+socket.on('reveal-failure', function(data) {
+  $('#game-status').text(data.msg);
+});
+
+
+/**
+ * Game End -> reset
+ */
+socket.on('game-end', (data) => {
+  $('#start-button').removeAttr('disabled');
+  $('#game-status').text(data.msg);
+  $('#game-timer').text('');
+  $('#reveal-secret').attr('disabled', 'disabled');
+});
 
 
 /**
