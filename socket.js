@@ -6,17 +6,22 @@ const sha256 = require('sha256');
 // game status
 const MIN_AMOUNT = 1;
 const SUBSCRIPTION_FEE = 0.1;
+const SCHOLARSHIP = 0.05;
 // deadlines in seconds
 const JOIN_DEADLINE = 10; 
 const COMMIT_DEADLINE = 10;
+const CHECK_BALANCE_DEADLINE = 10;
 const REVEAL_DEADLINE = 10;
+const DISTRIBUTE_DEADLINE = 10;
 const GAME_STATE_ENUM = {
   UNACTIVATED: 1,
   WAIT_FOR_JOIN: 2,
   STARTED: 3,
-  COMMITTED: 4
+  CHECK_BALANCE: 4, 
+  COMMITTED: 5,
+  DISTRIBUTE: 6
 };
-const PLAYER_INITIAL_AMT = 10;
+const PLAYER_INITIAL_AMT = 10.0;
 
 module.exports.listen = function(app) {
   io = socketIo.listen(app);
@@ -88,14 +93,12 @@ module.exports.listen = function(app) {
         } else {
           // only able to activate if unactivated
           console.log('Game activated by player ' + req.playerId + '.');
-          let date = new Date();
-
-          // update game state
           gameState = GAME_STATE_ENUM.WAIT_FOR_JOIN;
 
           // automatically make the player join the game he activated
           gamePlayers.add(req.playerId);
 
+          let date = new Date();
           // broadcast to everyone
           io.emit('waiting-for-join', {
             msg: 'New game activated by player: ' + req.playerId,
@@ -115,12 +118,15 @@ module.exports.listen = function(app) {
                 msg: 'Game will start in ' + (countdown--) + ' seconds.'
               });
             } else {
-              // change game status from WAIT_FOR_JOIN to STARTED
-              console.log('Game started.');
-              gameState = GAME_STATE_ENUM.STARTED;
+              // todo: if only one player in the game -> halt
+
+
+              console.log('Game has started.');
               clearInterval(joinTimer);
+              gameState = GAME_STATE_ENUM.STARTED;
+
               io.emit('game-start', { 
-                msg: 'Game has started.',
+                msg: 'Game has started, in commit stage.',
                 time: new Date()
               });
 
@@ -129,78 +135,132 @@ module.exports.listen = function(app) {
               let commitTimer = setInterval(() => {
                 if (countdown > 0) {
                   io.emit('timer-update', { 
-                    msg: 'You have ' + (countdown--) + ' seconds to send your guess.'
+                    msg: 'Check balance will end in ' + (countdown--) + ' seconds.'
                   });
                 } else {
-                  // change game status from STARTED to COMMITTED
-                  console.log('Commit started.');
-                  gameState = GAME_STATE_ENUM.COMMITTED;
+                  console.log('Check balance has started.');
                   clearInterval(commitTimer);
+                  gameState = GAME_STATE_ENUM.CHECK_BALANCE;
 
-                  io.emit('reveal-secret', {
-                    msg: 'Game in reveal secret stage.',
+                  io.emit('status-update', {
+                    msg: 'Game in check balance stage.',
                     time: new Date()
                   });
 
-                  // update counter
-                  countdown = REVEAL_DEADLINE;
-                  let revealTimer = setInterval(() => {
+                  countdown = CHECK_BALANCE_DEADLINE;
+                  let checkBalanceTimer = setInterval(() => {
+                    // todo: kick out user if he doesn't have enough credit, and halt the game if only one user present 
+                    // add one more cycle
+
                     if (countdown > 0) {
                       io.emit('timer-update', { 
-                        msg: 'You have ' + (countdown--) + ' seconds to reveal your secret.'
+                        msg: 'You have ' + (countdown--) + ' seconds to send your guess.'
                       });
                     } else {
-                      // convert 0 based location to 1 based index
-                      treasureLocation++;
-                      let msg = 'Game finishes with correct location: ' + treasureLocation;
-                      console.log(msg);
-                      io.emit('status-update', {
-                        msg: msg,
-                        time: new Date
+                      console.log('Commit has started.');
+                      clearInterval(checkBalanceTimer);
+                      gameState = GAME_STATE_ENUM.COMMITTED;
+
+                      io.emit('reveal-secret', {
+                        msg: 'Game in reveal secret stage.',
+                        time: new Date()
                       });
 
-                      // count number of players who have made correct guess
-                      let correctPlayer = new Set();
-                      for (let id of validPlayer) {
-                        if (playerGuess.get(id) == treasureLocation) {
-                          correctPlayer.add(id);
-                        }
-                      }
-
-                      if (correctPlayer.size === 0) {
-                        msg = 'No player has made the correct guess.';
-                      } else {
-                        msg = 'Player ' + Array.from(correctPlayer).toString() + ' has made correct guess.';
-                      }
-                      io.emit('status-update', {
-                        msg: msg,
-                        time: new Date
-                      });
-
-                      // award user who has made correct guess
-                      if (correctPlayer.size != 0) {
-                        let individualPrice = Math.floor(treasurePool * 100 / correctPlayer.size) / 100;
-                        for (let id of correctPlayer) {
-                          playerBank.set(id, playerBank.get(id) + individualPrice);
-                          io.to(playerSocketMap.get(id)).emit('bank-update', {
-                            amount: playerBank.get(id)
+                      // update counter
+                      countdown = REVEAL_DEADLINE;
+                      let revealTimer = setInterval(() => {
+                        if (countdown > 0) {
+                          io.emit('timer-update', { 
+                            msg: 'You have ' + (countdown--) + ' seconds to reveal your secret.'
                           });
-                        }
-                        treasurePool = 0;
-                      }
+                        } else {
+                          console.log('Distribution has started.')
+                          clearInterval(revealTimer);
+                          gameState = GAME_STATE_ENUM.DISTRIBUTE;
 
-                      // end game: change game variables to default value
-                      gameState = GAME_STATE_ENUM.UNACTIVATED;
-                      gamePlayers = new Set();
-                      playerCommit = new Map();
-                      playerGuess = new Map();
-                      validPlayer = new Set();
-                      treasureLocation = 0;
-                      
-                      clearInterval(revealTimer);
-                      io.emit('game-end', {
-                        msg: 'Game has not been activated.'
-                      });
+                          io.emit('status-update', {
+                            msg: 'Game in distribution stage.',
+                            time: new Date()
+                          });
+
+                          // convert 0 based location to 1 based index
+                          treasureLocation++;
+                          let msg = 'Game finishes with correct location: ' + treasureLocation;
+                          console.log(msg);
+                          io.emit('status-update', {
+                            msg: msg,
+                            time: new Date
+                          });
+
+                          // reward players who reveal correct secret (calculated using the full price pool)
+                          let totalScholarship = treasurePool * SCHOLARSHIP;
+                          let individualScholarship = Math.floor(totalScholarship * 100.0 / validPlayer.size) / 100.0;
+                          for (let id of validPlayer) {
+                            playerBank.set(id, playerBank.get(id) + individualScholarship);
+
+                            io.to(playerSocketMap.get(id)).emit('bank-update', {
+                              amount: playerBank.get(id)
+                            });
+                          }
+                          treasurePool -= totalScholarship;
+
+                          // count number of players who have made correct guess
+                          let correctPlayer = new Set();
+                          for (let id of validPlayer) {
+                            if (playerGuess.get(id) == treasureLocation) {
+                              correctPlayer.add(id);
+                            }
+                          }
+
+                          if (correctPlayer.size === 0) {
+                            msg = 'No player has made the correct guess.';
+                          } else {
+                            msg = 'Player ' + Array.from(correctPlayer).toString() + ' has made correct guess.';
+                          }
+                          io.emit('status-update', {
+                            msg: msg,
+                            time: new Date
+                          });
+
+                          // award user who has made correct guess
+                          if (correctPlayer.size != 0) {
+                            let individualPrice = Math.floor(treasurePool * 100.0 / correctPlayer.size) / 100.0;
+                            for (let id of correctPlayer) {
+                              playerBank.set(id, playerBank.get(id) + individualPrice);
+
+                              io.to(playerSocketMap.get(id)).emit('bank-update', {
+                                amount: playerBank.get(id)
+                              });
+                            }
+                            treasurePool = 0.0;
+                          }
+
+                          // distribution cycle
+                          countdown = DISTRIBUTE_DEADLINE
+                          let distributeTimer = setInterval(() => {
+                            if (countdown > 0) {
+                              io.emit('timer-update', { 
+                                msg: 'Distribution will end in ' + (countdown--) + ' seconds.'
+                              });
+                            } else {
+                              console.log('Game is ended.');
+                              clearInterval(distributeTimer);
+                              gameState = GAME_STATE_ENUM.UNACTIVATED;
+
+                              // change game variables to default value
+                              gamePlayers = new Set();
+                              playerCommit = new Map();
+                              playerGuess = new Map();
+                              validPlayer = new Set();
+                              treasureLocation = 0;
+                              
+                              io.emit('game-end', {
+                                msg: 'Game has not been activated.'
+                              });
+                            }
+                          }, 1000);
+                        }
+                      }, 1000);
                     }
                   }, 1000);
                 }
@@ -260,6 +320,7 @@ module.exports.listen = function(app) {
 
     // client send (encrypted commit, guess) pair
     socket.on('commit-guess', function(req) {
+      console.log(gameState);
       if (!req.playerId || !req.guess || !req.commit) {
         // deny request
         io.to(socket.id).emit('commit-failure', {
@@ -331,13 +392,6 @@ module.exports.listen = function(app) {
           });
 
           validPlayer.add(id);
-
-          // return user the subscription fee
-          playerBank.set(id, playerBank.get(id) + SUBSCRIPTION_FEE);
-          io.to(socket.id).emit('bank-update', {
-            amount: playerBank.get(id)
-          });
-
         } else {
           io.to(socket.id).emit('reveal-failure', {
             msg: 'Incorrect secret: it is not able to open up previous commit.'
